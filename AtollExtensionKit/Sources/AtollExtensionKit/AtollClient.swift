@@ -19,6 +19,7 @@ public final class AtollClient: @unchecked Sendable {
     private var widgetDismissalHandlers: [String: () -> Void] = [:]
     private var notchDismissalHandlers: [String: () -> Void] = [:]
     private let zoidMeetingActionRouter = ZoidMeetingActionRouter()
+    private var zoidMeetingActionObserver: NSObjectProtocol?
     
     /// Initialize a new AtollClient instance.
     /// For most use cases, use `AtollClient.shared` instead.
@@ -201,14 +202,12 @@ public final class AtollClient: @unchecked Sendable {
             )
         }
 
-        let isAuthorized = try await requestAuthorization()
-        guard isAuthorized else {
-            throw AtollExtensionKitError.notAuthorized
-        }
-
         zoidMeetingActionRouter.register(promptID: prompt.id, handler: onAction)
         do {
-            try await connectionManager.presentZoidMeetingPrompt(prompt)
+            try ZoidMeetingDistributedBridge.postPrompt(
+                prompt,
+                bundleIdentifier: Bundle.main.bundleIdentifier ?? "unknown"
+            )
         } catch {
             zoidMeetingActionRouter.remove(promptID: prompt.id)
             throw error
@@ -219,9 +218,10 @@ public final class AtollClient: @unchecked Sendable {
         promptID: String,
         result: ZoidMeetingSaveResult
     ) async throws {
-        try await connectionManager.reportZoidMeetingSaveResult(
+        try ZoidMeetingDistributedBridge.postSaveResult(
             promptID: promptID,
-            result: result
+            result: result,
+            bundleIdentifier: Bundle.main.bundleIdentifier ?? "unknown"
         )
     }
     
@@ -260,6 +260,22 @@ public final class AtollClient: @unchecked Sendable {
                 self?.zoidMeetingActionRouter.route(
                     promptID: promptID,
                     actionRawValue: actionRawValue
+                )
+            }
+        }
+
+        zoidMeetingActionObserver = DistributedNotificationCenter.default().addObserver(
+            forName: ZoidMeetingDistributedBridge.actionNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let (payload, _) = ZoidMeetingDistributedBridge.decodeAction(notification) else {
+                return
+            }
+            Task { @MainActor in
+                self?.zoidMeetingActionRouter.route(
+                    promptID: payload.promptID,
+                    actionRawValue: payload.action.rawValue
                 )
             }
         }

@@ -23,8 +23,49 @@ final class ZoidMeetingPromptManager: ObservableObject {
     private var bundleIdentifier: String?
     private var timeoutTask: Task<Void, Never>?
     private var closeTask: Task<Void, Never>?
+    private var distributedObservers: [NSObjectProtocol] = []
 
-    private init() {}
+    private init() {
+        let center = DistributedNotificationCenter.default()
+        distributedObservers.append(
+            center.addObserver(
+                forName: ZoidMeetingDistributedBridge.promptNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                guard
+                    let (prompt, bundleIdentifier)
+                        = ZoidMeetingDistributedBridge.decodePrompt(notification)
+                else {
+                    return
+                }
+                Task { @MainActor in
+                    try? self?.present(prompt, bundleIdentifier: bundleIdentifier)
+                }
+            }
+        )
+        distributedObservers.append(
+            center.addObserver(
+                forName: ZoidMeetingDistributedBridge.saveResultNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                guard
+                    let (payload, bundleIdentifier)
+                        = ZoidMeetingDistributedBridge.decodeSaveResult(notification)
+                else {
+                    return
+                }
+                Task { @MainActor in
+                    guard self?.bundleIdentifier == bundleIdentifier else { return }
+                    try? self?.reportSaveResult(
+                        promptID: payload.promptID,
+                        result: payload.result
+                    )
+                }
+            }
+        )
+    }
 
     func present(
         _ prompt: ZoidMeetingPrompt,
@@ -93,12 +134,22 @@ final class ZoidMeetingPromptManager: ObservableObject {
     ) {
         switch effect {
         case .send(let action):
+            try? ZoidMeetingDistributedBridge.postAction(
+                promptID: promptID,
+                action: action,
+                bundleIdentifier: bundleIdentifier
+            )
             ExtensionXPCServiceHost.shared.notifyZoidMeetingAction(
                 bundleIdentifier: bundleIdentifier,
                 promptID: promptID,
                 action: action
             )
         case .sendAndClose(let action):
+            try? ZoidMeetingDistributedBridge.postAction(
+                promptID: promptID,
+                action: action,
+                bundleIdentifier: bundleIdentifier
+            )
             ExtensionXPCServiceHost.shared.notifyZoidMeetingAction(
                 bundleIdentifier: bundleIdentifier,
                 promptID: promptID,
