@@ -2,15 +2,21 @@
 
 Status: approved
 
+Website tracking amendment approved: 2026-07-23
+
 ## Purpose
 
-Zoid 0 will become one native macOS application that owns application-time tracking, screen observation, local meeting detection, confirmation, Calendar creation, and Reminder creation.
+Zoid 0 will become one native macOS application that owns application and Safari website time tracking, screen observation, local meeting detection, confirmation, Calendar creation, and Reminder creation.
 The existing external Screenwatch installation will no longer be required.
 Screenwatch will become an internal capture service inside the Zoid 0 process.
+Safari website tracking will use an embedded Safari Web Extension that communicates only with Zoid 0 on the local Mac.
 
 ## Product Boundary
 
-Zoid 0 will use one application bundle, one process, one stable bundle identifier, and one permission identity.
+Zoid 0 will use one user-installed application bundle and one stable main-application bundle identifier.
+Capture, OCR, meeting detection, application tracking, storage, and scheduling will remain in the main Zoid 0 process.
+The application bundle may contain one Safari Web Extension that Safari runs in its extension process.
+The extension is not a standalone helper, daemon, login item, or independently installed application.
 Closing the main window will leave Zoid 0 running in the background.
 Choosing Quit Zoid 0 will stop capture and time tracking, safely finish active writes, and terminate the process.
 Zoid 0 will not install or launch a separate helper, daemon, or Screenwatch executable.
@@ -25,6 +31,9 @@ Zoid 0 will request Calendar and Reminders permission only when the user confirm
 macOS will retain these permissions for Zoid 0's stable signed bundle identity unless the user revokes them or the application identity changes.
 When Screen Recording permission is denied, Zoid 0 will show an honest blocked state and an Open System Settings action.
 Zoid 0 will not repeatedly trigger a system permission prompt after denial.
+Safari website tracking will remain off until the user enables the bundled extension and grants website access in Safari.
+Zoid 0 will explain that full website coverage requires access to all websites while allowing the user to grant access to fewer websites.
+Denied or missing Safari access will not interrupt application-level tracking.
 
 ## Application Time Tracking
 
@@ -32,8 +41,39 @@ Application time tracking will not depend on screenshots or OCR.
 Zoid 0 will subscribe to macOS `NSWorkspace` application-activation events.
 Each activity interval will record the application's bundle identifier, display name, start time, end time, and duration.
 The tracker will pause time attribution while the Mac is idle, locked, asleep, or the user session is inactive.
-The first version will report daily application-level totals.
-Browser websites, document names, and individual window-title totals are not required for the first version.
+The first version will report daily totals grouped into Work, Communication, Social, Gaming, Media, Utilities, Browser, and Uncategorized.
+Application assignments will use the stable application bundle identifier.
+Known applications may receive a default category.
+Unknown applications will remain Uncategorized until the user assigns them.
+User assignments will always override defaults.
+The interface will show category totals first and allow category filters to reveal the contributing applications and websites.
+Document names and individual window-title totals are not required for the first version.
+
+## Safari Website Time Tracking
+
+Zoid 0 will include an embedded Safari Web Extension for website-level time attribution.
+The extension will observe only the active Safari tab while Safari is the foreground application.
+It will reduce the active page address to its registrable domain before sending an activity change to the native extension boundary.
+For example, a YouTube watch address will become `youtube.com`.
+The full URL, path, query string, fragment, page title, page content, and inactive-tab history will not be sent to or stored by Zoid 0.
+Website identification will not use screenshots or OCR.
+
+Each website activity interval will record the browser identity, normalized domain, start time, end time, and duration.
+Domain assignments will use the normalized domain.
+Known domains may receive a default category.
+Unknown domains will remain Uncategorized until the user assigns them.
+User assignments will always override defaults.
+
+Website intervals will replace the matching portion of generic Safari application time rather than being added to it.
+Time for which the active domain is unavailable will remain attributed to Safari in the Browser category.
+The system will never count the same interval as both Safari application time and website time.
+
+The extension and native app will communicate locally through Apple's supported Safari extension messaging boundary.
+No website activity will leave the Mac.
+The main app will publish a short-lived tracking-session marker that is refreshed only while Zoid 0 is running.
+The extension will discard activity when that marker is missing or expired, and explicit Quit will clear it.
+Disabling the extension or revoking its website permission will immediately fall back to application-level Safari tracking.
+Website tracking for browsers other than Safari is not included in this version.
 
 ## Internal Screenwatch Capture
 
@@ -115,7 +155,7 @@ Malformed metadata will skip the affected record without stopping the service.
 
 ## Storage
 
-One local store will hold application activity intervals, daily totals, processed fingerprints, meeting candidates, and scheduling receipts.
+One local store will hold application activity intervals, Safari website activity intervals, category assignments, daily totals, processed fingerprints, meeting candidates, and scheduling receipts.
 Screenshot files will remain separate from structured records.
 The storage boundary will support future retention controls without requiring them in this implementation.
 No full activity history, deletion interface, or extensive evidence manager is included in this scope.
@@ -128,6 +168,15 @@ Automated tests will prove:
 - Closing the window leaves capture and time tracking active.
 - Quit stops capture and finalizes the active time interval.
 - Application changes produce correct non-overlapping duration intervals.
+- Safari active-tab changes produce correct non-overlapping domain intervals.
+- Website records contain normalized domains and never full URLs, paths, queries, fragments, or page titles.
+- Domain normalization handles public suffixes such as `co.uk` without merging unrelated websites.
+- Safari website intervals replace matching Safari application time without double-counting.
+- Missing extension permission falls back to generic Safari application time.
+- The extension records nothing while the main Zoid 0 app is not running.
+- Default category assignments apply only when no user assignment exists.
+- User category assignments override defaults for applications and domains.
+- Category totals equal the sum of their visible application and website contributors.
 - Idle, sleep, lock, and inactive sessions are not attributed to an application.
 - Unchanged screenshots do not run OCR.
 - Changed screenshots use a latest-only bounded OCR queue.
@@ -145,6 +194,8 @@ Signed application verification will cover:
 - Background capture after closing the window.
 - Capture termination after explicit Quit.
 - Application-time totals from real application switches.
+- Safari domain totals from real active-tab changes after explicit extension permission.
+- Revoking Safari extension permission falls back to generic Safari time.
 - A changed-screen meeting flow through notification and confirmation.
 - A real Calendar event and Reminder created only after confirmation.
 - A proof screenshot of the implemented interface and health state.
@@ -156,6 +207,9 @@ Signed application verification will cover:
 - Remote OCR or cloud screenshot processing.
 - Automatic Calendar scheduling.
 - Client communication.
-- Per-website or per-window time reports.
+- Full URLs, page titles, page contents, search queries, and per-page reports.
+- Website tracking in browsers other than Safari.
+- Automatic semantic classification based on webpage contents.
+- Per-window time reports.
 - Cross-device Screen Time synchronization.
 - Windows or mobile support.
