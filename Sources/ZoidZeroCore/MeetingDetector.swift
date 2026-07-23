@@ -1,6 +1,15 @@
 import Foundation
 
-public struct MeetingDetector: Sendable {
+public protocol MeetingDetecting: Sendable {
+  func detectMeetings(
+    text: String,
+    personHint: String,
+    observedAt: Date,
+    fingerprint: String
+  ) async throws -> [MeetingCandidate]
+}
+
+public struct MeetingDetector: MeetingDetecting, Sendable {
   private let calendar: Calendar
 
   public init(calendar: Calendar = .current) {
@@ -8,6 +17,20 @@ public struct MeetingDetector: Sendable {
   }
 
   public func detectMeetings(
+    text: String,
+    personHint: String,
+    observedAt: Date,
+    fingerprint: String
+  ) -> [MeetingCandidate] {
+    detectMeetingCandidates(
+      text: text,
+      personHint: personHint,
+      observedAt: observedAt,
+      fingerprint: fingerprint
+    )
+  }
+
+  private func detectMeetingCandidates(
     text: String,
     personHint: String,
     observedAt: Date,
@@ -30,12 +53,26 @@ public struct MeetingDetector: Sendable {
     observedAt: Date,
     fingerprint: String
   ) -> MeetingCandidate? {
-    detectMeetings(
+    detectMeetingCandidates(
       text: text,
       personHint: personHint,
       observedAt: observedAt,
       fingerprint: fingerprint
     ).first
+  }
+
+  public func detectMeetings(
+    text: String,
+    personHint: String,
+    observedAt: Date,
+    fingerprint: String
+  ) async throws -> [MeetingCandidate] {
+    detectMeetingCandidates(
+      text: text,
+      personHint: personHint,
+      observedAt: observedAt,
+      fingerprint: fingerprint
+    )
   }
 
   private func detect(
