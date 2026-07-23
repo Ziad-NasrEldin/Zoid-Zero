@@ -35,6 +35,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/PlugIns"
 cp "$BIN_DIR/ZoidZero" "$APP/Contents/MacOS/ZoidZero"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
+cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 cp -R "$EXTENSION_PRODUCT" "$APP/Contents/PlugIns/Zoid 0 Extension.appex"
 codesign \
   --force \
