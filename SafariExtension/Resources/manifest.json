@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Zoid 0 Website Time",
+  "version": "1.0.0",
+  "description": "Attributes active Safari time to domains locally in Zoid 0.",
+  "permissions": [
+    "nativeMessaging",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

@@ -30,7 +30,7 @@ public actor ScreenAnalyzer {
     let result = ScreenAnalysisResult(
       screen: screen,
       recognizedText: text,
-      candidate: candidates.first
+      candidates: candidates
     )
     try await storage.persistAnalyzedScreen(result)
     return result
