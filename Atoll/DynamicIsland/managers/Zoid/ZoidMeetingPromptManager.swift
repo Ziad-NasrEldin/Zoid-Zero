@@ -78,14 +78,16 @@ final class ZoidMeetingPromptManager: ObservableObject {
         timeoutTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(7))
             guard !Task.isCancelled else { return }
-            await self?.select(.timeout)
+            await self?.handleDeadline()
         }
     }
 
     func select(_ action: ZoidMeetingAction) {
         guard let prompt, let bundleIdentifier else { return }
-        timeoutTask?.cancel()
-        timeoutTask = nil
+        if action != .confirm {
+            timeoutTask?.cancel()
+            timeoutTask = nil
+        }
 
         let effect = stateMachine.handle(.select(action))
         publishState()
@@ -94,6 +96,17 @@ final class ZoidMeetingPromptManager: ObservableObject {
             promptID: prompt.id,
             bundleIdentifier: bundleIdentifier
         )
+    }
+
+    private func handleDeadline() {
+        switch phase {
+        case .awaitingDecision:
+            select(.timeout)
+        case .saving:
+            close()
+        case .idle, .saved, .failed:
+            break
+        }
     }
 
     func reportSaveResult(
