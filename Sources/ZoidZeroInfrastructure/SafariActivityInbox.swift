@@ -26,7 +26,8 @@ public struct SafariActivityEvent: Codable, Equatable, Sendable {
 }
 
 public actor SafariActivityInbox {
-  public static let appGroupIdentifier = "group.com.ziadnasreldin.zoidzero"
+  public static let appGroupIdentifier =
+    "377QC32T9T.group.com.ziadnasreldin.zoidzero"
 
   private struct SessionMarker: Codable {
     let timestampMilliseconds: Int64

@@ -9,6 +9,7 @@ EXTENSION_PROJECT="$ROOT/SafariExtension/HostProject/Zoid 0/Zoid 0.xcodeproj"
 EXTENSION_BUILD_DIR="$ROOT/.build/safari-extension"
 EXTENSION_PRODUCT="$EXTENSION_BUILD_DIR/Zoid 0 Extension.appex"
 SIGNING_IDENTITY="${ZOID_ZERO_SIGNING_IDENTITY:-$(security find-identity -v -p codesigning | awk -F '"' '/Apple Development/{print $2; exit}')}"
+APP_GROUP_IDENTIFIER="377QC32T9T.group.com.ziadnasreldin.zoidzero"
 
 if [[ -z "$SIGNING_IDENTITY" ]]; then
   echo "No code-signing identity is available. Set ZOID_ZERO_SIGNING_IDENTITY." >&2
@@ -65,8 +66,15 @@ if ! codesign -d --entitlements :- "$APP" 2>/dev/null \
 fi
 
 if ! codesign -d --entitlements :- "$APP" 2>/dev/null \
-  | grep -q "group.com.ziadnasreldin.zoidzero"; then
+  | grep -q "$APP_GROUP_IDENTIFIER"; then
   echo "Shared app group entitlement is missing from the signed app." >&2
+  exit 1
+fi
+
+if ! codesign -d --entitlements :- \
+  "$APP/Contents/PlugIns/Zoid 0 Extension.appex" 2>/dev/null \
+  | grep -q "$APP_GROUP_IDENTIFIER"; then
+  echo "Shared app group entitlement is missing from the signed extension." >&2
   exit 1
 fi
 

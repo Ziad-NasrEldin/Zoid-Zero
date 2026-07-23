@@ -2,7 +2,8 @@ import Foundation
 import SafariServices
 
 final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
-  private static let appGroupIdentifier = "group.com.ziadnasreldin.zoidzero"
+  private static let appGroupIdentifier =
+    "377QC32T9T.group.com.ziadnasreldin.zoidzero"
   private static let maximumMarkerAgeMilliseconds: Int64 = 30_000
 
   func beginRequest(with context: NSExtensionContext) {

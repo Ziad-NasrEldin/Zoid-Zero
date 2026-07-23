@@ -8,7 +8,7 @@
 	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.com.ziadnasreldin.zoidzero</string>
+		<string>377QC32T9T.group.com.ziadnasreldin.zoidzero</string>
 	</array>
 	<key>com.apple.security.mach-services</key>
 	<dict>

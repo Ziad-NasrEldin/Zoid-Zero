@@ -2,7 +2,7 @@ import Foundation
 
 public enum ZoidMeetingAppGroupBridge {
     public static let appGroupIdentifier =
-        "group.com.ziadnasreldin.zoidzero"
+        "377QC32T9T.group.com.ziadnasreldin.zoidzero"
 
     public static func postPrompt(
         _ prompt: ZoidMeetingPrompt,
