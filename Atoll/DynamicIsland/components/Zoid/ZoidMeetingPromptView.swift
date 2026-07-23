@@ -36,41 +36,55 @@ struct ZoidMeetingPromptView: View {
             }
 
             if phase == .awaitingDecision || phase == .saving {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(prompt.title)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                    if shouldShowParticipant {
-                        Text(prompt.participantName ?? "")
+                HStack(alignment: .bottom, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(prompt.title)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                        if shouldShowParticipant {
+                            Text(prompt.participantName ?? "")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.65))
+                        }
+                        Text(dateLine)
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.65))
+                            .foregroundStyle(.white.opacity(0.72))
+                        Text(timeLine)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.72))
                     }
-                    Text(dateLine)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.72))
-                    Text(timeLine)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.72))
-                }
 
-                HStack(spacing: 8) {
-                    Button("Dismiss") {
-                        onAction(.dismiss)
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(!isDecisionEnabled)
-                    .accessibilityIdentifier("ZoidMeetingDismiss")
+                    Spacer(minLength: 0)
 
-                    Button("Confirm") {
-                        onAction(.confirm)
+                    HStack(spacing: 8) {
+                        Button("Dismiss") {
+                            onAction(.dismiss)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.white.opacity(0.9))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(.white.opacity(0.14), in: Capsule())
+                        .contentShape(Capsule())
+                        .disabled(!isDecisionEnabled)
+                        .accessibilityIdentifier("ZoidMeetingDismiss")
+
+                        Button("Confirm") {
+                            onAction(.confirm)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(.blue, in: Capsule())
+                        .contentShape(Capsule())
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(!isDecisionEnabled)
+                        .accessibilityIdentifier("ZoidMeetingConfirm")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!isDecisionEnabled)
-                    .accessibilityIdentifier("ZoidMeetingConfirm")
+                    .controlSize(.regular)
                 }
-                .controlSize(.regular)
             }
         }
         .padding(.horizontal, 18)

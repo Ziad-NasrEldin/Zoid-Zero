@@ -63,24 +63,35 @@ struct AtollMeetingInteractionClientTests {
     #expect(received == [.confirm])
   }
 
-  @Test("signed ZoidZero app may connect to Atoll XPC")
-  func hasAtollMachLookupEntitlement() throws {
+  @Test("ZoidZero and Atoll use the same private app group")
+  func sharesPrivateAppGroupWithAtoll() throws {
     let repositoryRoot = URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent()
       .deletingLastPathComponent()
       .deletingLastPathComponent()
-    let entitlementURL = repositoryRoot
-      .appendingPathComponent("Resources/ZoidZero.entitlements")
-    let data = try Data(contentsOf: entitlementURL)
-    let propertyList = try PropertyListSerialization.propertyList(
-      from: data,
-      format: nil
-    ) as? [String: Any]
-    let names = propertyList?[
-      "com.apple.security.temporary-exception.mach-lookup.global-name"
-    ] as? [String]
+    let paths = [
+      "Resources/ZoidZero.entitlements",
+      "Atoll/DynamicIsland/DynamicIsland.entitlements",
+    ]
 
-    #expect(names?.contains("com.ebullioscopic.Atoll.xpc") == true)
+    for path in paths {
+      let data = try Data(
+        contentsOf: repositoryRoot.appendingPathComponent(path)
+      )
+      let propertyList = try PropertyListSerialization.propertyList(
+        from: data,
+        format: nil
+      ) as? [String: Any]
+      let groups = propertyList?[
+        "com.apple.security.application-groups"
+      ] as? [String]
+
+      #expect(
+        groups?.contains(
+          ZoidMeetingAppGroupBridge.appGroupIdentifier
+        ) == true
+      )
+    }
   }
 
   private func makeCandidate() -> MeetingCandidate {

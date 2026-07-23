@@ -19,7 +19,7 @@ public final class AtollClient: @unchecked Sendable {
     private var widgetDismissalHandlers: [String: () -> Void] = [:]
     private var notchDismissalHandlers: [String: () -> Void] = [:]
     private let zoidMeetingActionRouter = ZoidMeetingActionRouter()
-    private var zoidMeetingActionObserver: NSObjectProtocol?
+    private var zoidMeetingActionTasks: [String: Task<Void, Never>] = [:]
     
     /// Initialize a new AtollClient instance.
     /// For most use cases, use `AtollClient.shared` instead.
@@ -204,10 +204,29 @@ public final class AtollClient: @unchecked Sendable {
 
         zoidMeetingActionRouter.register(promptID: prompt.id, handler: onAction)
         do {
-            try ZoidMeetingDistributedBridge.postPrompt(
+            try ZoidMeetingAppGroupBridge.postPrompt(
                 prompt,
                 bundleIdentifier: Bundle.main.bundleIdentifier ?? "unknown"
             )
+            zoidMeetingActionTasks[prompt.id]?.cancel()
+            zoidMeetingActionTasks[prompt.id] = Task { [weak self] in
+                for _ in 0..<300 {
+                    if
+                        let (payload, _) = try? ZoidMeetingAppGroupBridge.takeAction(),
+                        payload.promptID == prompt.id
+                    {
+                        self?.zoidMeetingActionRouter.route(
+                            promptID: payload.promptID,
+                            actionRawValue: payload.action.rawValue
+                        )
+                        self?.zoidMeetingActionTasks[prompt.id] = nil
+                        return
+                    }
+                    try? await Task.sleep(for: .milliseconds(100))
+                    guard !Task.isCancelled else { return }
+                }
+                self?.zoidMeetingActionTasks[prompt.id] = nil
+            }
         } catch {
             zoidMeetingActionRouter.remove(promptID: prompt.id)
             throw error
@@ -218,7 +237,7 @@ public final class AtollClient: @unchecked Sendable {
         promptID: String,
         result: ZoidMeetingSaveResult
     ) async throws {
-        try ZoidMeetingDistributedBridge.postSaveResult(
+        try ZoidMeetingAppGroupBridge.postSaveResult(
             promptID: promptID,
             result: result,
             bundleIdentifier: Bundle.main.bundleIdentifier ?? "unknown"
@@ -264,21 +283,6 @@ public final class AtollClient: @unchecked Sendable {
             }
         }
 
-        zoidMeetingActionObserver = DistributedNotificationCenter.default().addObserver(
-            forName: ZoidMeetingDistributedBridge.actionNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let (payload, _) = ZoidMeetingDistributedBridge.decodeAction(notification) else {
-                return
-            }
-            Task { @MainActor in
-                self?.zoidMeetingActionRouter.route(
-                    promptID: payload.promptID,
-                    actionRawValue: payload.action.rawValue
-                )
-            }
-        }
     }
     
     private func isVersionCompatible(installed: String, required: String) -> Bool {

@@ -69,10 +69,4 @@ if ! codesign -d --entitlements :- "$APP" 2>/dev/null \
   exit 1
 fi
 
-if ! codesign -d --entitlements :- "$APP" 2>/dev/null \
-  | grep -q "com.ebullioscopic.Atoll.xpc"; then
-  echo "Atoll XPC lookup entitlement is missing from the signed app." >&2
-  exit 1
-fi
-
 echo "$APP"

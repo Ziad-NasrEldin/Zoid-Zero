@@ -23,48 +23,34 @@ final class ZoidMeetingPromptManager: ObservableObject {
     private var bundleIdentifier: String?
     private var timeoutTask: Task<Void, Never>?
     private var closeTask: Task<Void, Never>?
-    private var distributedObservers: [NSObjectProtocol] = []
+    private var bridgeTask: Task<Void, Never>?
 
     private init() {
-        let center = DistributedNotificationCenter.default()
-        distributedObservers.append(
-            center.addObserver(
-                forName: ZoidMeetingDistributedBridge.promptNotification,
-                object: nil,
-                queue: .main
-            ) { [weak self] notification in
-                guard
+        bridgeTask = Task { [weak self] in
+            while !Task.isCancelled {
+                if
                     let (prompt, bundleIdentifier)
-                        = ZoidMeetingDistributedBridge.decodePrompt(notification)
-                else {
-                    return
+                        = try? ZoidMeetingAppGroupBridge.takePrompt()
+                {
+                    try? self?.present(
+                        prompt,
+                        bundleIdentifier: bundleIdentifier
+                    )
                 }
-                Task { @MainActor in
-                    try? self?.present(prompt, bundleIdentifier: bundleIdentifier)
-                }
-            }
-        )
-        distributedObservers.append(
-            center.addObserver(
-                forName: ZoidMeetingDistributedBridge.saveResultNotification,
-                object: nil,
-                queue: .main
-            ) { [weak self] notification in
-                guard
+                if
+                    let self,
                     let (payload, bundleIdentifier)
-                        = ZoidMeetingDistributedBridge.decodeSaveResult(notification)
-                else {
-                    return
-                }
-                Task { @MainActor in
-                    guard self?.bundleIdentifier == bundleIdentifier else { return }
-                    try? self?.reportSaveResult(
+                        = try? ZoidMeetingAppGroupBridge.takeSaveResult(),
+                    self.bundleIdentifier == bundleIdentifier
+                {
+                    try? self.reportSaveResult(
                         promptID: payload.promptID,
                         result: payload.result
                     )
                 }
+                try? await Task.sleep(for: .milliseconds(100))
             }
-        )
+        }
     }
 
     func present(
@@ -134,7 +120,7 @@ final class ZoidMeetingPromptManager: ObservableObject {
     ) {
         switch effect {
         case .send(let action):
-            try? ZoidMeetingDistributedBridge.postAction(
+            try? ZoidMeetingAppGroupBridge.postAction(
                 promptID: promptID,
                 action: action,
                 bundleIdentifier: bundleIdentifier
@@ -145,7 +131,7 @@ final class ZoidMeetingPromptManager: ObservableObject {
                 action: action
             )
         case .sendAndClose(let action):
-            try? ZoidMeetingDistributedBridge.postAction(
+            try? ZoidMeetingAppGroupBridge.postAction(
                 promptID: promptID,
                 action: action,
                 bundleIdentifier: bundleIdentifier
