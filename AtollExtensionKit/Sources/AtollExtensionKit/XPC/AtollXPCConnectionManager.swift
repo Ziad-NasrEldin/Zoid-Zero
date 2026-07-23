@@ -73,11 +73,14 @@ final class AtollXPCConnectionManager: NSObject, @unchecked Sendable {
         return newConnection
     }
     
-    private func getService() throws -> AtollXPCServiceProtocol {
+    private func getService(
+        onError: ((Error) -> Void)? = nil
+    ) throws -> AtollXPCServiceProtocol {
         let connection = try getConnection()
         
         guard let service = connection.remoteObjectProxyWithErrorHandler({ error in
             print("XPC Error: \(error)")
+            onError?(error)
         }) as? AtollXPCServiceProtocol else {
             throw AtollExtensionKitError.serviceUnavailable
         }
@@ -89,17 +92,28 @@ final class AtollXPCConnectionManager: NSObject, @unchecked Sendable {
     
     func requestAuthorization() async throws -> Bool {
         try await withCheckedThrowingContinuation { continuation in
+            let gate = XPCContinuationGate(continuation)
             do {
-                let service = try getService()
+                let service = try getService { error in
+                    gate.resume(
+                        throwing: AtollExtensionKitError.connectionFailed(
+                            underlying: error
+                        )
+                    )
+                }
                 service.requestAuthorization(bundleIdentifier: bundleIdentifier) { authorized, error in
                     if let error {
-                        continuation.resume(throwing: AtollExtensionKitError.connectionFailed(underlying: error))
+                        gate.resume(
+                            throwing: AtollExtensionKitError.connectionFailed(
+                                underlying: error
+                            )
+                        )
                     } else {
-                        continuation.resume(returning: authorized)
+                        gate.resume(returning: authorized)
                     }
                 }
             } catch {
-                continuation.resume(throwing: error)
+                gate.resume(throwing: error)
             }
         }
     }
@@ -292,23 +306,30 @@ final class AtollXPCConnectionManager: NSObject, @unchecked Sendable {
     func presentZoidMeetingPrompt(_ prompt: ZoidMeetingPrompt) async throws {
         let data = try JSONEncoder().encode(prompt)
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            let gate = XPCContinuationGate(continuation)
             do {
-                let service = try getService()
+                let service = try getService { error in
+                    gate.resume(
+                        throwing: AtollExtensionKitError.connectionFailed(
+                            underlying: error
+                        )
+                    )
+                }
                 service.presentZoidMeetingPrompt(
                     promptData: data,
                     bundleIdentifier: bundleIdentifier
                 ) { success, error in
                     if success {
-                        continuation.resume()
+                        gate.resume(returning: ())
                     } else {
-                        continuation.resume(
+                        gate.resume(
                             throwing: error
                                 ?? AtollExtensionKitError.unknown("Failed to present Zoid meeting prompt")
                         )
                     }
                 }
             } catch {
-                continuation.resume(throwing: error)
+                gate.resume(throwing: error)
             }
         }
     }
@@ -318,30 +339,61 @@ final class AtollXPCConnectionManager: NSObject, @unchecked Sendable {
         result: ZoidMeetingSaveResult
     ) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            let gate = XPCContinuationGate(continuation)
             do {
-                let service = try getService()
+                let service = try getService { error in
+                    gate.resume(
+                        throwing: AtollExtensionKitError.connectionFailed(
+                            underlying: error
+                        )
+                    )
+                }
                 service.reportZoidMeetingSaveResult(
                     promptID: promptID,
                     resultRawValue: result.rawValue,
                     bundleIdentifier: bundleIdentifier
                 ) { success, error in
                     if success {
-                        continuation.resume()
+                        gate.resume(returning: ())
                     } else {
-                        continuation.resume(
+                        gate.resume(
                             throwing: error
                                 ?? AtollExtensionKitError.unknown("Failed to report Zoid meeting result")
                         )
                     }
                 }
             } catch {
-                continuation.resume(throwing: error)
+                gate.resume(throwing: error)
             }
         }
     }
     
     deinit {
         connection?.invalidate()
+    }
+}
+
+private final class XPCContinuationGate<Value>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Value, Error>?
+
+    init(_ continuation: CheckedContinuation<Value, Error>) {
+        self.continuation = continuation
+    }
+
+    func resume(returning value: Value) {
+        takeContinuation()?.resume(returning: value)
+    }
+
+    func resume(throwing error: Error) {
+        takeContinuation()?.resume(throwing: error)
+    }
+
+    private func takeContinuation() -> CheckedContinuation<Value, Error>? {
+        lock.lock()
+        defer { lock.unlock() }
+        defer { continuation = nil }
+        return continuation
     }
 }
 
