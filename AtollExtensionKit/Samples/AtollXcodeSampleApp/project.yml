@@ -1,0 +1,25 @@
+name: AtollXcodeSampleApp
+options:
+  deploymentTarget:
+    macOS: "13.0"
+schemes:
+  AtollXcodeSampleApp:
+    build:
+      targets:
+        AtollXcodeSampleApp: all
+targets:
+  AtollXcodeSampleApp:
+    type: application
+    platform: macOS
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.example.AtollXcodeSampleApp
+      CODE_SIGN_STYLE: Automatic
+    sources:
+      - path: Sources/App
+    info:
+      path: Supporting/Info.plist
+    dependencies:
+      - package: AtollExtensionKit
+packages:
+  AtollExtensionKit:
+    path: ../..
