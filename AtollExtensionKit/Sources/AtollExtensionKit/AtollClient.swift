@@ -18,6 +18,7 @@ public final class AtollClient: @unchecked Sendable {
     private var activityDismissalHandlers: [String: () -> Void] = [:]
     private var widgetDismissalHandlers: [String: () -> Void] = [:]
     private var notchDismissalHandlers: [String: () -> Void] = [:]
+    private let zoidMeetingActionRouter = ZoidMeetingActionRouter()
     
     /// Initialize a new AtollClient instance.
     /// For most use cases, use `AtollClient.shared` instead.
@@ -187,6 +188,42 @@ public final class AtollClient: @unchecked Sendable {
     public func onNotchExperienceDismiss(experienceID: String, callback: @escaping () -> Void) {
         notchDismissalHandlers[experienceID] = callback
     }
+
+    // MARK: - Zoid Meeting Prompts
+
+    public func presentZoidMeetingPrompt(
+        _ prompt: ZoidMeetingPrompt,
+        onAction: @escaping @MainActor (ZoidMeetingAction) -> Void
+    ) async throws {
+        guard prompt.isValid else {
+            throw AtollExtensionKitError.invalidDescriptor(
+                reason: "Zoid meeting prompt validation failed"
+            )
+        }
+
+        let isAuthorized = try await requestAuthorization()
+        guard isAuthorized else {
+            throw AtollExtensionKitError.notAuthorized
+        }
+
+        zoidMeetingActionRouter.register(promptID: prompt.id, handler: onAction)
+        do {
+            try await connectionManager.presentZoidMeetingPrompt(prompt)
+        } catch {
+            zoidMeetingActionRouter.remove(promptID: prompt.id)
+            throw error
+        }
+    }
+
+    public func reportZoidMeetingSaveResult(
+        promptID: String,
+        result: ZoidMeetingSaveResult
+    ) async throws {
+        try await connectionManager.reportZoidMeetingSaveResult(
+            promptID: promptID,
+            result: result
+        )
+    }
     
     // MARK: - Private Helpers
     
@@ -215,6 +252,15 @@ public final class AtollClient: @unchecked Sendable {
             Task { @MainActor in
                 self?.notchDismissalHandlers[experienceID]?()
                 self?.notchDismissalHandlers.removeValue(forKey: experienceID)
+            }
+        }
+
+        connectionManager.onZoidMeetingAction = { [weak self] promptID, actionRawValue in
+            Task { @MainActor in
+                self?.zoidMeetingActionRouter.route(
+                    promptID: promptID,
+                    actionRawValue: actionRawValue
+                )
             }
         }
     }

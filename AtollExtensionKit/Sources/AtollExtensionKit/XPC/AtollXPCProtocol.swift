@@ -66,6 +66,19 @@ import Foundation
     /// - Parameter bundleIdentifier: App bundle identifier
     /// - Parameter reply: Callback with success/failure
     func dismissNotchExperience(experienceID: String, bundleIdentifier: String, reply: @escaping (Bool, Error?) -> Void)
+
+    func presentZoidMeetingPrompt(
+        promptData: Data,
+        bundleIdentifier: String,
+        reply: @escaping (Bool, Error?) -> Void
+    )
+
+    func reportZoidMeetingSaveResult(
+        promptID: String,
+        resultRawValue: String,
+        bundleIdentifier: String,
+        reply: @escaping (Bool, Error?) -> Void
+    )
     
     /// Get Atoll version information.
     /// - Parameter reply: Callback with version string
@@ -89,4 +102,6 @@ import Foundation
     /// Notifies client that a notch experience was dismissed.
     /// - Parameter experienceID: The dismissed notch identifier
     func notchExperienceDidDismiss(experienceID: String)
+
+    func zoidMeetingActionSelected(promptID: String, actionRawValue: String)
 }

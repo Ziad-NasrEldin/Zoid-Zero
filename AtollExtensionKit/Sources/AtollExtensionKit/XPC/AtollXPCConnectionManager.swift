@@ -18,6 +18,7 @@ final class AtollXPCConnectionManager: NSObject, @unchecked Sendable {
     var onActivityDismiss: ((String) -> Void)?
     var onWidgetDismiss: ((String) -> Void)?
     var onNotchExperienceDismiss: ((String) -> Void)?
+    var onZoidMeetingAction: ((String, String) -> Void)?
     
     private var bundleIdentifier: String {
         Bundle.main.bundleIdentifier ?? "unknown"
@@ -287,6 +288,57 @@ final class AtollXPCConnectionManager: NSObject, @unchecked Sendable {
             }
         }
     }
+
+    func presentZoidMeetingPrompt(_ prompt: ZoidMeetingPrompt) async throws {
+        let data = try JSONEncoder().encode(prompt)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            do {
+                let service = try getService()
+                service.presentZoidMeetingPrompt(
+                    promptData: data,
+                    bundleIdentifier: bundleIdentifier
+                ) { success, error in
+                    if success {
+                        continuation.resume()
+                    } else {
+                        continuation.resume(
+                            throwing: error
+                                ?? AtollExtensionKitError.unknown("Failed to present Zoid meeting prompt")
+                        )
+                    }
+                }
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
+    }
+
+    func reportZoidMeetingSaveResult(
+        promptID: String,
+        result: ZoidMeetingSaveResult
+    ) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            do {
+                let service = try getService()
+                service.reportZoidMeetingSaveResult(
+                    promptID: promptID,
+                    resultRawValue: result.rawValue,
+                    bundleIdentifier: bundleIdentifier
+                ) { success, error in
+                    if success {
+                        continuation.resume()
+                    } else {
+                        continuation.resume(
+                            throwing: error
+                                ?? AtollExtensionKitError.unknown("Failed to report Zoid meeting result")
+                        )
+                    }
+                }
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
+    }
     
     deinit {
         connection?.invalidate()
@@ -310,5 +362,9 @@ extension AtollXPCConnectionManager: AtollXPCClientProtocol {
     
     func notchExperienceDidDismiss(experienceID: String) {
         onNotchExperienceDismiss?(experienceID)
+    }
+
+    func zoidMeetingActionSelected(promptID: String, actionRawValue: String) {
+        onZoidMeetingAction?(promptID, actionRawValue)
     }
 }
