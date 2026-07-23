@@ -17,10 +17,11 @@ final class AppModel: ObservableObject {
   @Published var safariWebsiteTrackingState: SafariWebsiteTrackingState = .unavailable
 
   private let workflow: MeetingCaptureWorkflow
-  private let notifier: DesktopMeetingNotifier
+  private let atollMeetingClient: AtollMeetingInteractionClient
   private let runtime: ZoidRuntime
   private var eventTask: Task<Void, Never>?
   private var totalsTask: Task<Void, Never>?
+  private var activeAtollPromptID: String?
 
   var candidate: MeetingCandidate? {
     pendingCandidates.first
@@ -36,13 +37,13 @@ final class AppModel: ObservableObject {
       ? .monitoring
       : .screenRecordingPermissionNeeded
     captureHealth = initialHealth
-    let notifier = DesktopMeetingNotifier()
-    self.notifier = notifier
+    let atollMeetingClient = AtollMeetingInteractionClient()
+    self.atollMeetingClient = atollMeetingClient
     let store = ZoidLocalStore()
     let scheduler = AppleSchedulingService()
     let workflow = MeetingCaptureWorkflow(
       source: EmptyCandidateSource(),
-      notifier: notifier,
+      notifier: SilentMeetingNotifier(),
       scheduler: scheduler,
       fingerprints: store,
       records: store
@@ -101,6 +102,9 @@ final class AppModel: ObservableObject {
           for candidate in candidates
           where !self.pendingCandidates.contains(where: { $0.id == candidate.id }) {
             self.pendingCandidates.append(candidate)
+            if self.activeAtollPromptID == nil {
+              await self.presentInAtoll(candidate)
+            }
           }
         case .health(let health):
           self.captureHealth = health
@@ -118,13 +122,15 @@ final class AppModel: ObservableObject {
     AppTerminationCoordinator.shared.model = self
   }
 
-  func confirm(_ edited: MeetingCandidate) async {
-    guard !isSaving else { return }
+  @discardableResult
+  func confirm(_ edited: MeetingCandidate) async -> Bool {
+    guard !isSaving else { return false }
     isSaving = true
     defer { isSaving = false }
     do {
       receipt = try await workflow.confirm(edited)
       pendingCandidates.removeAll { $0.id == edited.id }
+      return true
     } catch {
       errorMessage = error.localizedDescription
       if let schedulingError = error as? AppleSchedulingService.SchedulingError {
@@ -139,6 +145,7 @@ final class AppModel: ObservableObject {
       } else {
         schedulingPrivacyPane = nil
       }
+      return false
     }
   }
 
@@ -224,7 +231,43 @@ final class AppModel: ObservableObject {
 
   private func startRuntime() async {
     await runtime.start()
-    await notifier.requestAuthorizationIfNeeded()
+  }
+
+  private func presentInAtoll(_ candidate: MeetingCandidate) async {
+    guard activeAtollPromptID == nil else { return }
+    activeAtollPromptID = candidate.id
+
+    let result = await atollMeetingClient.present(candidate) { [weak self] action in
+      Task { @MainActor [weak self] in
+        await self?.handleAtollAction(action, candidate: candidate)
+      }
+    }
+
+    if result == .unavailable {
+      activeAtollPromptID = nil
+    }
+  }
+
+  private func handleAtollAction(
+    _ action: MeetingQuickAction,
+    candidate: MeetingCandidate
+  ) async {
+    guard activeAtollPromptID == candidate.id else { return }
+
+    switch action {
+    case .confirm:
+      let saved = await confirm(candidate)
+      try? await atollMeetingClient.report(
+        promptID: candidate.id,
+        result: saved ? .saved : .failed
+      )
+    case .dismiss:
+      pendingCandidates.removeAll { $0.id == candidate.id }
+    case .timeout:
+      break
+    }
+
+    activeAtollPromptID = nil
   }
 
   private func refreshDailyActivity() async {
@@ -245,6 +288,10 @@ private struct EmptyCandidateSource: MeetingCandidateSource {
   func nextCandidate() -> MeetingCandidate? {
     nil
   }
+}
+
+private struct SilentMeetingNotifier: MeetingNotifying {
+  func notify(candidates: [MeetingCandidate]) async {}
 }
 
 private actor CaptureHealthCoordinator {

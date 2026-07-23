@@ -10,6 +10,9 @@ let package = Package(
     .library(name: "ZoidZeroCore", targets: ["ZoidZeroCore"]),
     .library(name: "ZoidZeroInfrastructure", targets: ["ZoidZeroInfrastructure"]),
   ],
+  dependencies: [
+    .package(path: "AtollExtensionKit"),
+  ],
   targets: [
     .target(name: "ZoidZeroCore"),
     .target(
@@ -18,7 +21,11 @@ let package = Package(
     ),
     .target(
       name: "ZoidZeroInfrastructure",
-      dependencies: ["ZoidZeroCore", "ZoidSafariBridge"]
+      dependencies: [
+        "ZoidZeroCore",
+        "ZoidSafariBridge",
+        .product(name: "AtollExtensionKit", package: "AtollExtensionKit"),
+      ]
     ),
     .executableTarget(
       name: "ZoidZeroApp",
