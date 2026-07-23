@@ -52,6 +52,7 @@ struct ContentView: View {
     @ObservedObject var capsLockManager = CapsLockManager.shared
     @ObservedObject var extensionLiveActivityManager = ExtensionLiveActivityManager.shared
     @ObservedObject var extensionNotchExperienceManager = ExtensionNotchExperienceManager.shared
+    @ObservedObject var zoidMeetingPromptManager = ZoidMeetingPromptManager.shared
     @ObservedObject var localSendService = LocalSendService.shared
     @State private var downloadManager = DownloadManager.shared
     @ObservedObject var shelfState = ShelfStateViewModel.shared
@@ -646,8 +647,24 @@ struct ContentView: View {
                 #if os(macOS)
                 if newState == .open {
                     TimerControlWindowManager.shared.hide()
+                    if zoidMeetingPromptManager.prompt != nil {
+                        zoidMeetingPromptManager.didBecomeVisible()
+                    }
                 }
                 #endif
+            }
+            .onChange(of: zoidMeetingPromptManager.prompt?.id) { _, promptID in
+                guard promptID != nil else { return }
+                coordinator.currentView = .home
+                openNotch()
+                if vm.notchState == .open {
+                    zoidMeetingPromptManager.didBecomeVisible()
+                }
+            }
+            .onChange(of: zoidMeetingPromptManager.closeSequence) { _, _ in
+                if vm.notchState == .open {
+                    vm.close()
+                }
             }
             .onChange(of: vm.isBatteryPopoverActive) { _, newPopoverState in
                 runAfter(0.1) {
@@ -1081,7 +1098,14 @@ struct ContentView: View {
               ZStack {
                   if vm.notchState == .open {
                       Group {
-                          switch coordinator.currentView {
+                          if let prompt = zoidMeetingPromptManager.prompt {
+                              ZoidMeetingPromptView(
+                                  prompt: prompt,
+                                  phase: zoidMeetingPromptManager.phase,
+                                  onAction: zoidMeetingPromptManager.select
+                              )
+                          } else {
+                            switch coordinator.currentView {
                               case .home:
                                   NotchHomeView(albumArtNamespace: albumArtNamespace)
                               case .shelf:
@@ -1106,9 +1130,10 @@ struct ContentView: View {
                                 } else {
                                     NotchHomeView(albumArtNamespace: albumArtNamespace)
                                 }
+                              }
                           }
                       }
-                      .id(coordinator.currentView)
+                      .id(zoidMeetingPromptManager.prompt?.id ?? String(describing: coordinator.currentView))
                       .transition(tabSwitchTransition)
                   }
               }
@@ -2159,7 +2184,7 @@ struct ContentView: View {
     }
 
     private func shouldPreventAutoClose() -> Bool {
-        coordinator.firstLaunch || hasAnyActivePopovers() || vm.isAutoCloseSuppressed || SharingStateManager.shared.preventNotchClose || (Defaults[.terminalStickyMode] && coordinator.currentView == .terminal)
+        zoidMeetingPromptManager.prompt != nil || coordinator.firstLaunch || hasAnyActivePopovers() || vm.isAutoCloseSuppressed || SharingStateManager.shared.preventNotchClose || (Defaults[.terminalStickyMode] && coordinator.currentView == .terminal)
     }
     
     // Helper to prevent rapid haptic feedback

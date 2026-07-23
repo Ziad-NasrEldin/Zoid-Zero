@@ -122,6 +122,19 @@ final class ExtensionXPCServiceHost: NSObject, NSXPCListenerDelegate {
         }
     }
 
+    func notifyZoidMeetingAction(
+        bundleIdentifier: String,
+        promptID: String,
+        action: ZoidMeetingAction
+    ) {
+        deliver(to: bundleIdentifier) { client in
+            client.zoidMeetingActionSelected(
+                promptID: promptID,
+                actionRawValue: action.rawValue
+            )
+        }
+    }
+
     private func resolveBundleIdentifier(for connection: NSXPCConnection) -> String? {
         let processIdentifier = connection.processIdentifier
         guard processIdentifier != 0 else { return nil }

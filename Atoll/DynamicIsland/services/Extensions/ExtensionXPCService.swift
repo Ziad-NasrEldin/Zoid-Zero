@@ -31,6 +31,7 @@ final class ExtensionXPCService: NSObject, @preconcurrency AtollXPCServiceProtoc
     private let liveActivityManager = ExtensionLiveActivityManager.shared
     private let widgetManager = ExtensionLockScreenWidgetManager.shared
     private let notchExperienceManager = ExtensionNotchExperienceManager.shared
+    private let zoidMeetingPromptManager = ZoidMeetingPromptManager.shared
     private let decoder = JSONDecoder()
 
     init(bundleIdentifier: String, host: ExtensionXPCServiceHost, connection: NSXPCConnection) {
@@ -180,6 +181,60 @@ final class ExtensionXPCService: NSObject, @preconcurrency AtollXPCServiceProtoc
         }
     }
 
+    // MARK: Zoid Meeting Prompts
+
+    func presentZoidMeetingPrompt(
+        promptData: Data,
+        bundleIdentifier providedBundleIdentifier: String,
+        reply: @escaping (Bool, Error?) -> Void
+    ) {
+        respond(reply: reply) { service in
+            guard providedBundleIdentifier == service.bundleIdentifier else {
+                throw ExtensionXPCServiceError.bundleMismatch(
+                    expected: service.bundleIdentifier,
+                    received: providedBundleIdentifier
+                )
+            }
+            guard service.authorizationManager.canProcessNotchExperienceRequest(
+                from: service.bundleIdentifier
+            ) else {
+                throw ExtensionValidationError.unauthorized
+            }
+
+            let prompt = try service.decoder.decode(
+                ZoidMeetingPrompt.self,
+                from: promptData
+            )
+            try service.zoidMeetingPromptManager.present(
+                prompt,
+                bundleIdentifier: service.bundleIdentifier
+            )
+        }
+    }
+
+    func reportZoidMeetingSaveResult(
+        promptID: String,
+        resultRawValue: String,
+        bundleIdentifier providedBundleIdentifier: String,
+        reply: @escaping (Bool, Error?) -> Void
+    ) {
+        respond(reply: reply) { service in
+            guard providedBundleIdentifier == service.bundleIdentifier else {
+                throw ExtensionXPCServiceError.bundleMismatch(
+                    expected: service.bundleIdentifier,
+                    received: providedBundleIdentifier
+                )
+            }
+            guard let result = ZoidMeetingSaveResult(rawValue: resultRawValue) else {
+                throw ExtensionXPCServiceError.invalidMeetingResult
+            }
+            try service.zoidMeetingPromptManager.reportSaveResult(
+                promptID: promptID,
+                result: result
+            )
+        }
+    }
+
     // MARK: Diagnostics
 
     func getVersion(reply: @escaping (String) -> Void) {
@@ -233,11 +288,14 @@ final class ExtensionXPCService: NSObject, @preconcurrency AtollXPCServiceProtoc
 
 private enum ExtensionXPCServiceError: LocalizedError {
     case bundleMismatch(expected: String, received: String)
+    case invalidMeetingResult
 
     var errorDescription: String? {
         switch self {
         case let .bundleMismatch(expected, received):
             return "Bundle identifier mismatch. Expected \(expected) but received \(received)."
+        case .invalidMeetingResult:
+            return "The Zoid meeting result is invalid."
         }
     }
 }
