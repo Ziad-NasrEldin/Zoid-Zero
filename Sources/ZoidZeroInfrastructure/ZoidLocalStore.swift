@@ -4,6 +4,7 @@ import ZoidZeroCore
 public actor ZoidLocalStore:
   ApplicationActivityStoring,
   CategoryAssignmentStoring,
+  AutomaticCategoryStoring,
   FingerprintStoring,
   MeetingRecordStoring,
   WebsiteActivityStoring
@@ -17,6 +18,7 @@ public actor ZoidLocalStore:
     var intervals: [ApplicationActivityInterval] = []
     var websiteIntervals: [WebsiteActivityInterval] = []
     var categoryAssignments: [ActivitySubject: ActivityCategory] = [:]
+    var automaticCategoryAssignments: [ActivitySubject: ActivityCategory] = [:]
     var fingerprints: Set<String> = []
     var candidates: [MeetingCandidate] = []
     var receipts: [ReceiptRecord] = []
@@ -25,6 +27,7 @@ public actor ZoidLocalStore:
       case intervals
       case websiteIntervals
       case categoryAssignments
+      case automaticCategoryAssignments
       case fingerprints
       case candidates
       case receipts
@@ -48,6 +51,11 @@ public actor ZoidLocalStore:
         try container.decodeIfPresent(
           [ActivitySubject: ActivityCategory].self,
           forKey: .categoryAssignments
+        ) ?? [:]
+      automaticCategoryAssignments =
+        try container.decodeIfPresent(
+          [ActivitySubject: ActivityCategory].self,
+          forKey: .automaticCategoryAssignments
         ) ?? [:]
       fingerprints =
         try container.decodeIfPresent(Set<String>.self, forKey: .fingerprints) ?? []
@@ -119,6 +127,47 @@ public actor ZoidLocalStore:
 
   public func userCategoryAssignments() -> [ActivitySubject: ActivityCategory] {
     state.categoryAssignments
+  }
+
+  public func resetCategory(for subject: ActivitySubject) {
+    state.categoryAssignments.removeValue(forKey: subject)
+    persist()
+  }
+
+  public func setAutomaticCategory(
+    _ category: ActivityCategory,
+    for subject: ActivitySubject
+  ) {
+    guard state.categoryAssignments[subject] == nil else { return }
+    state.automaticCategoryAssignments[subject] = category
+    persist()
+  }
+
+  public func automaticCategoryAssignments() -> [ActivitySubject: ActivityCategory] {
+    state.automaticCategoryAssignments
+  }
+
+  public func observedActivityMetadata() -> [ActivityMetadata] {
+    var values: [ActivitySubject: ActivityMetadata] = [:]
+    for interval in state.intervals {
+      let subject = ActivitySubject.application(
+        bundleIdentifier: interval.application.bundleIdentifier
+      )
+      values[subject] = ActivityMetadata(
+        subject: subject,
+        displayName: interval.application.displayName
+      )
+    }
+    for interval in state.websiteIntervals {
+      let subject = ActivitySubject.website(domain: interval.website.domain)
+      values[subject] = ActivityMetadata(
+        subject: subject,
+        displayName: interval.website.domain
+      )
+    }
+    return values.values.sorted {
+      $0.subject.stableIdentifier < $1.subject.stableIdentifier
+    }
   }
 
   public func contains(_ fingerprint: String) -> Bool {
