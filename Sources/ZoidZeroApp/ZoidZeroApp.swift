@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ZoidZeroCore
 
 @main
 struct ZoidZeroApp: App {
@@ -25,8 +26,146 @@ final class AppTerminationCoordinator {
 }
 
 @MainActor
-final class ZoidZeroAppDelegate: NSObject, NSApplicationDelegate {
+final class ZoidZeroAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
   private var isTerminating = false
+  private let launchUptime = ProcessInfo.processInfo.systemUptime
+  private var loginItem: LoginItemController?
+  private var statusItem: NSStatusItem?
+  private var uptimeTimer: Timer?
+
+  func applicationDidFinishLaunching(_ notification: Notification) {
+    loginItem = LoginItemController()
+    installStatusItem()
+  }
+
+  static func openApp() {
+    let application = NSApplication.shared
+    application.activate(ignoringOtherApps: true)
+    application.windows.first { $0.canBecomeKey }?.makeKeyAndOrderFront(nil)
+  }
+
+  private func installStatusItem() {
+    let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    item.autosaveName = "com.ziadnasreldin.zoidzero.status"
+    item.isVisible = true
+    guard let button = item.button else { return }
+
+    let icon = NSApplication.shared.applicationIconImage.copy() as? NSImage
+    icon?.size = NSSize(width: 18, height: 18)
+    icon?.isTemplate = false
+    button.image = icon
+    button.imagePosition = .imageLeading
+    button.toolTip = "Zoid 0 is active"
+
+    let menu = NSMenu()
+    menu.delegate = self
+    item.menu = menu
+    statusItem = item
+    updateUptime()
+
+    let timer = Timer(timeInterval: 60, repeats: true) { [weak self] _ in
+      MainActor.assumeIsolated {
+        self?.updateUptime()
+      }
+    }
+    timer.tolerance = 5
+    RunLoop.main.add(timer, forMode: .common)
+    uptimeTimer = timer
+  }
+
+  private func updateUptime() {
+    let uptime = UptimeFormatter.concise(
+      elapsed: ProcessInfo.processInfo.systemUptime - launchUptime
+    )
+    statusItem?.button?.title = " \(uptime)"
+    statusItem?.button?.setAccessibilityLabel("Zoid 0 active for \(uptime)")
+  }
+
+  func menuWillOpen(_ menu: NSMenu) {
+    loginItem?.refresh()
+    rebuildMenu(menu)
+  }
+
+  private func rebuildMenu(_ menu: NSMenu) {
+    menu.removeAllItems()
+    menu.addItem(
+      withTitle: "Open Zoid 0",
+      action: #selector(openFromMenu),
+      keyEquivalent: ""
+    )
+    menu.addItem(.separator())
+
+    let activeItem = NSMenuItem(title: "Zoid 0 is active", action: nil, keyEquivalent: "")
+    activeItem.isEnabled = false
+    menu.addItem(activeItem)
+
+    if let loginItem {
+      let stateItem = NSMenuItem(
+        title: loginItem.state.title,
+        action: nil,
+        keyEquivalent: ""
+      )
+      stateItem.isEnabled = false
+      menu.addItem(stateItem)
+
+      switch loginItem.state {
+      case .enabled:
+        menu.addItem(
+          withTitle: "Turn Off Launch at Login",
+          action: #selector(disableLoginItem),
+          keyEquivalent: ""
+        )
+      case .requiresApproval:
+        menu.addItem(
+          withTitle: "Open Login Items Settings",
+          action: #selector(openLoginItemsSettings),
+          keyEquivalent: ""
+        )
+      case .disabled, .unavailable, .error:
+        menu.addItem(
+          withTitle: "Enable Launch at Login",
+          action: #selector(enableLoginItem),
+          keyEquivalent: ""
+        )
+      }
+
+      if case .error(let message) = loginItem.state {
+        let errorItem = NSMenuItem(title: message, action: nil, keyEquivalent: "")
+        errorItem.isEnabled = false
+        menu.addItem(errorItem)
+      }
+    }
+
+    menu.addItem(.separator())
+    menu.addItem(
+      withTitle: "Quit Zoid 0",
+      action: #selector(quitFromMenu),
+      keyEquivalent: "q"
+    )
+    for item in menu.items where item.action != nil {
+      item.target = self
+    }
+  }
+
+  @objc private func openFromMenu() {
+    Self.openApp()
+  }
+
+  @objc private func enableLoginItem() {
+    loginItem?.enable()
+  }
+
+  @objc private func disableLoginItem() {
+    loginItem?.disable()
+  }
+
+  @objc private func openLoginItemsSettings() {
+    loginItem?.openLoginItemsSettings()
+  }
+
+  @objc private func quitFromMenu() {
+    NSApplication.shared.terminate(nil)
+  }
 
   func applicationShouldTerminateAfterLastWindowClosed(
     _ sender: NSApplication
@@ -39,7 +178,7 @@ final class ZoidZeroAppDelegate: NSObject, NSApplicationDelegate {
     hasVisibleWindows flag: Bool
   ) -> Bool {
     if !flag {
-      sender.windows.first?.makeKeyAndOrderFront(nil)
+      Self.openApp()
     }
     return true
   }
