@@ -75,7 +75,8 @@ final class ZoidZeroAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       forKey: Self.mainWindowFrameKey
     ) {
       let frame = NSRectFromString(savedFrame)
-      let screen = NSScreen.screens.first { $0.frame.intersects(frame) }
+      let screen =
+        NSScreen.screens.first { $0.frame.intersects(frame) }
         ?? window.screen
         ?? NSScreen.main
       window.setFrame(

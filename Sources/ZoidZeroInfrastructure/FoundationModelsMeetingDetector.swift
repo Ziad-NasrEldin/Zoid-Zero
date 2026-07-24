@@ -66,12 +66,14 @@ public struct FoundationModelsMeetingDetector: MeetingDetecting {
         Meeting\(personClause) \(generated.dateExpression) at \
         \(generated.timeExpression)\(durationClause)
         """
-      guard var candidate = parser.detect(
-        text: canonical,
-        personHint: generated.person.isEmpty ? personHint : generated.person,
-        observedAt: observedAt,
-        fingerprint: "\(fingerprint)#model-\(index)"
-      ) else { return nil }
+      guard
+        var candidate = parser.detect(
+          text: canonical,
+          personHint: generated.person.isEmpty ? personHint : generated.person,
+          observedAt: observedAt,
+          fingerprint: "\(fingerprint)#model-\(index)"
+        )
+      else { return nil }
       if !generated.title.isEmpty {
         candidate.title = generated.title
       }

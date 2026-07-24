@@ -128,10 +128,12 @@ public struct MeetingDetector: MeetingDetecting, Sendable {
 
   private func meetingSpans(in text: String) -> [String] {
     let intentPattern = #"\b(meet(?:ing)?|call|appointment|موعد|اجتماع|مكالمة)\b"#
-    guard let regex = try? NSRegularExpression(
-      pattern: intentPattern,
-      options: [.caseInsensitive]
-    ) else { return [] }
+    guard
+      let regex = try? NSRegularExpression(
+        pattern: intentPattern,
+        options: [.caseInsensitive]
+      )
+    else { return [] }
     let range = NSRange(text.startIndex..., in: text)
     let matches = regex.matches(in: text, range: range)
     return matches.enumerated().compactMap { index, match in
@@ -162,10 +164,11 @@ public struct MeetingDetector: MeetingDetecting, Sendable {
   }
 
   private func extractDuration(from text: String) -> Int? {
-    guard let result = match(
-      #"\b(?:for|لمدة)\s+(\d+)\s*(minutes?|mins?|hours?|hrs?|دقيقة|دقائق|ساعة|ساعات)\b"#,
-      in: text
-    ), let amount = capture(result, 1).flatMap(Int.init),
+    guard
+      let result = match(
+        #"\b(?:for|لمدة)\s+(\d+)\s*(minutes?|mins?|hours?|hrs?|دقيقة|دقائق|ساعة|ساعات)\b"#,
+        in: text
+      ), let amount = capture(result, 1).flatMap(Int.init),
       let unit = capture(result, 2)?.lowercased()
     else { return nil }
     return unit.hasPrefix("h") || unit.hasPrefix("ساعة") ? amount * 60 : amount

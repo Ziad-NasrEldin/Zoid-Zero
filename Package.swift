@@ -11,7 +11,7 @@ let package = Package(
     .library(name: "ZoidZeroInfrastructure", targets: ["ZoidZeroInfrastructure"]),
   ],
   dependencies: [
-    .package(path: "AtollExtensionKit"),
+    .package(path: "AtollExtensionKit")
   ],
   targets: [
     .target(name: "ZoidZeroCore"),

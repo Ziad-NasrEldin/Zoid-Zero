@@ -98,7 +98,8 @@ public final class SafariWebsiteActivityController:
       }
       let idle = idleDuration()
       guard pauseReasons.isEmpty, idle < 90 else {
-        let pauseDate = idle >= 90
+        let pauseDate =
+          idle >= 90
           ? pollDate.addingTimeInterval(-idle)
           : pollDate
         await tracker.pause(at: pauseDate)

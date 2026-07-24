@@ -1,6 +1,7 @@
 import AtollExtensionKit
 import Foundation
 import Testing
+
 @testable import ZoidZeroCore
 @testable import ZoidZeroInfrastructure
 
@@ -78,13 +79,15 @@ struct AtollMeetingInteractionClientTests {
       let data = try Data(
         contentsOf: repositoryRoot.appendingPathComponent(path)
       )
-      let propertyList = try PropertyListSerialization.propertyList(
-        from: data,
-        format: nil
-      ) as? [String: Any]
-      let groups = propertyList?[
-        "com.apple.security.application-groups"
-      ] as? [String]
+      let propertyList =
+        try PropertyListSerialization.propertyList(
+          from: data,
+          format: nil
+        ) as? [String: Any]
+      let groups =
+        propertyList?[
+          "com.apple.security.application-groups"
+        ] as? [String]
 
       #expect(
         groups?.contains(
