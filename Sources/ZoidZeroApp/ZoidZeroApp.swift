@@ -14,6 +14,17 @@ struct ZoidZeroApp: App {
     }
     .windowStyle(.hiddenTitleBar)
     .defaultSize(width: 820, height: 680)
+    .commands {
+      CommandGroup(after: .appSettings) {
+        Toggle(
+          "Show Zoid 0 in Dock",
+          isOn: Binding(
+            get: { appDelegate.showsInDock },
+            set: { appDelegate.setShowsInDock($0) }
+          )
+        )
+      }
+    }
   }
 }
 
@@ -29,9 +40,14 @@ final class AppTerminationCoordinator {
 final class ZoidZeroAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
   private var isTerminating = false
   private let launchUptime = ProcessInfo.processInfo.systemUptime
+  private var dockVisibility: DockVisibilityController?
   private var loginItem: LoginItemController?
   private var statusItem: NSStatusItem?
   private var uptimeTimer: Timer?
+
+  func applicationWillFinishLaunching(_ notification: Notification) {
+    dockVisibility = DockVisibilityController()
+  }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     loginItem = LoginItemController()
@@ -42,6 +58,17 @@ final class ZoidZeroAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     let application = NSApplication.shared
     application.activate(ignoringOtherApps: true)
     application.windows.first { $0.canBecomeKey }?.makeKeyAndOrderFront(nil)
+  }
+
+  var showsInDock: Bool {
+    dockVisibility?.showsInDock ?? true
+  }
+
+  func setShowsInDock(_ showsInDock: Bool) {
+    dockVisibility?.setShowsInDock(showsInDock)
+    if showsInDock {
+      Self.openApp()
+    }
   }
 
   private func installStatusItem() {
@@ -136,6 +163,23 @@ final class ZoidZeroAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       }
     }
 
+    if let dockVisibility {
+      menu.addItem(.separator())
+      let dockItem = NSMenuItem(
+        title: "Show Zoid 0 in Dock",
+        action: #selector(toggleDockVisibility),
+        keyEquivalent: ""
+      )
+      dockItem.state = dockVisibility.showsInDock ? .on : .off
+      menu.addItem(dockItem)
+
+      if let message = dockVisibility.errorMessage {
+        let errorItem = NSMenuItem(title: message, action: nil, keyEquivalent: "")
+        errorItem.isEnabled = false
+        menu.addItem(errorItem)
+      }
+    }
+
     menu.addItem(.separator())
     menu.addItem(
       withTitle: "Quit Zoid 0",
@@ -161,6 +205,11 @@ final class ZoidZeroAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   @objc private func openLoginItemsSettings() {
     loginItem?.openLoginItemsSettings()
+  }
+
+  @objc private func toggleDockVisibility() {
+    guard let dockVisibility else { return }
+    setShowsInDock(!dockVisibility.showsInDock)
   }
 
   @objc private func quitFromMenu() {
