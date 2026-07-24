@@ -100,6 +100,7 @@ struct SafariWebsiteActivityControllerTests {
     await controller.stop()
 
     #expect(await store.values.isEmpty)
+    #expect(controller.state == .on)
   }
 
   @Test("idle time closes domain attribution at the last user input")

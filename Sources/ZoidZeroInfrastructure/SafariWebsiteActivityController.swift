@@ -87,6 +87,14 @@ public final class SafariWebsiteActivityController:
         lastEventDate = event.date
         acceptedEvents.append(event)
         lastKnownDomain = event.kind == .activeDomain ? event.domain : nil
+        switch event.kind {
+        case .activeDomain:
+          if event.domain != nil {
+            state = .on
+          }
+        case .domainUnavailable:
+          state = .permissionNeeded
+        }
       }
       let idle = idleDuration()
       guard pauseReasons.isEmpty, idle < 90 else {
@@ -112,10 +120,8 @@ public final class SafariWebsiteActivityController:
             ),
             at: event.date
           )
-          state = .on
         case .domainUnavailable:
           await tracker.pause(at: event.date)
-          state = .permissionNeeded
         }
       }
       if acceptedEvents.isEmpty, let lastKnownDomain {
