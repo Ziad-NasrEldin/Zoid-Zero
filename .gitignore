@@ -1,3 +1,17 @@
 .build/
 SafariExtension/HostProject/Zoid 0/build/
 .DS_Store
+.env
+.env.*
+!.env.example
+.scratch/
+.codegraph/
+DerivedData/
+*.xcarchive
+*.dmg
+*.pkg
+*.zip
+*.log
+*.jsonl
+docs/proof/
+docs/*-proof.png
