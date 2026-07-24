@@ -43,6 +43,58 @@ struct ActivityCategorizationTests {
     #expect(resolver.category(for: subject) == .gaming)
   }
 
+  @Test("manual assignments override automatic assignments")
+  func manualAssignmentsOverrideAutomaticAssignments() {
+    let subject = ActivitySubject.website(domain: "twitch.tv")
+    let resolver = CategoryAssignmentResolver(
+      defaults: [subject: .media],
+      automaticAssignments: [subject: .gaming],
+      userAssignments: [subject: .work]
+    )
+
+    #expect(resolver.resolution(for: subject) == .init(category: .work, source: .manual))
+  }
+
+  @Test("automatic assignments override built-in defaults")
+  func automaticAssignmentsOverrideDefaults() {
+    let subject = ActivitySubject.website(domain: "github.com")
+    let resolver = CategoryAssignmentResolver(
+      defaults: [subject: .work],
+      automaticAssignments: [subject: .communication]
+    )
+
+    #expect(
+      resolver.resolution(for: subject)
+        == .init(category: .communication, source: .automatic)
+    )
+  }
+
+  @Test("deterministic classifier is conservative for apps and domains")
+  func deterministicClassifierIsConservative() {
+    let classifier = DeterministicActivityClassifier()
+
+    #expect(
+      classifier.classify(
+        .application(bundleIdentifier: "com.microsoft.VSCode"),
+        displayName: "Visual Studio Code"
+      ) == .work
+    )
+    #expect(
+      classifier.classify(.website(domain: "docs.github.com"), displayName: "github.com")
+        == .work
+    )
+    #expect(
+      classifier.classify(
+        .application(bundleIdentifier: "com.example.mystery"),
+        displayName: "Mystery"
+      ) == nil
+    )
+    #expect(
+      classifier.classify(.website(domain: "example.test"), displayName: "example.test")
+        == nil
+    )
+  }
+
   @Test("unknown subjects remain uncategorized")
   func unknownSubjectsRemainUncategorized() {
     let resolver = CategoryAssignmentResolver()

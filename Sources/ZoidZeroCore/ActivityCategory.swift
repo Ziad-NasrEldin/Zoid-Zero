@@ -40,7 +40,45 @@ public enum ActivitySubject: Codable, Equatable, Hashable, Sendable {
 
 public protocol CategoryAssignmentStoring: Sendable {
   func setCategory(_ category: ActivityCategory, for subject: ActivitySubject) async
+  func resetCategory(for subject: ActivitySubject) async
   func userCategoryAssignments() async -> [ActivitySubject: ActivityCategory]
+}
+
+public protocol AutomaticCategoryStoring: Sendable {
+  func setAutomaticCategory(
+    _ category: ActivityCategory,
+    for subject: ActivitySubject
+  ) async
+  func automaticCategoryAssignments() async -> [ActivitySubject: ActivityCategory]
+  func userCategoryAssignments() async -> [ActivitySubject: ActivityCategory]
+  func observedActivityMetadata() async -> [ActivityMetadata]
+}
+
+public struct ActivityMetadata: Equatable, Hashable, Sendable {
+  public let subject: ActivitySubject
+  public let displayName: String
+
+  public init(subject: ActivitySubject, displayName: String) {
+    self.subject = subject
+    self.displayName = displayName
+  }
+}
+
+public enum CategoryAssignmentSource: String, Equatable, Sendable {
+  case manual
+  case automatic
+  case builtIn
+  case unknown
+}
+
+public struct CategoryResolution: Equatable, Sendable {
+  public let category: ActivityCategory
+  public let source: CategoryAssignmentSource
+
+  public init(category: ActivityCategory, source: CategoryAssignmentSource) {
+    self.category = category
+    self.source = source
+  }
 }
 
 public enum DefaultActivityCategories {
@@ -80,18 +118,92 @@ public enum DefaultActivityCategories {
 
 public struct CategoryAssignmentResolver: Sendable {
   public let defaults: [ActivitySubject: ActivityCategory]
+  public let automaticAssignments: [ActivitySubject: ActivityCategory]
   public let userAssignments: [ActivitySubject: ActivityCategory]
 
   public init(
     defaults: [ActivitySubject: ActivityCategory] = [:],
+    automaticAssignments: [ActivitySubject: ActivityCategory] = [:],
     userAssignments: [ActivitySubject: ActivityCategory] = [:]
   ) {
     self.defaults = defaults
+    self.automaticAssignments = automaticAssignments
     self.userAssignments = userAssignments
   }
 
   public func category(for subject: ActivitySubject) -> ActivityCategory {
-    userAssignments[subject] ?? defaults[subject] ?? .uncategorized
+    resolution(for: subject).category
+  }
+
+  public func resolution(for subject: ActivitySubject) -> CategoryResolution {
+    if let category = userAssignments[subject] {
+      return CategoryResolution(category: category, source: .manual)
+    }
+    if let category = automaticAssignments[subject] {
+      return CategoryResolution(category: category, source: .automatic)
+    }
+    if let category = defaults[subject] {
+      return CategoryResolution(category: category, source: .builtIn)
+    }
+    return CategoryResolution(category: .uncategorized, source: .unknown)
+  }
+}
+
+public struct DeterministicActivityClassifier: Sendable {
+  public init() {}
+
+  public func classify(
+    _ subject: ActivitySubject,
+    displayName: String
+  ) -> ActivityCategory? {
+    if let exact = DefaultActivityCategories.assignments[subject] {
+      return exact
+    }
+
+    switch subject {
+    case .application(let bundleIdentifier):
+      return classifyApplication(
+        bundleIdentifier: bundleIdentifier.lowercased(),
+        displayName: displayName.lowercased()
+      )
+    case .website(let domain):
+      return classifyWebsite(domain.lowercased())
+    }
+  }
+
+  private func classifyApplication(
+    bundleIdentifier: String,
+    displayName: String
+  ) -> ActivityCategory? {
+    let value = "\(bundleIdentifier) \(displayName)"
+    let rules: [(ActivityCategory, [String])] = [
+      (.communication, ["slack", "whatsapp", "telegram", "discord", "zoom", "teams"]),
+      (.gaming, ["steam", "epicgames", "riotclient", "leagueoflegends"]),
+      (.media, ["spotify", "vlc", "music", "podcasts"]),
+      (.browser, ["safari", "chrome", "firefox", "browser", "arc"]),
+      (.work, ["xcode", "vscode", "visual studio code", "jetbrains", "terminal", "iterm"]),
+      (.utilities, ["finder", "systemsettings", "systempreferences", "activitymonitor"]),
+    ]
+    for (category, tokens) in rules where tokens.contains(where: value.contains) {
+      return category
+    }
+    return nil
+  }
+
+  private func classifyWebsite(_ domain: String) -> ActivityCategory? {
+    let exactOrSubdomain: [(ActivityCategory, [String])] = [
+      (.work, ["github.com", "gitlab.com", "figma.com", "linear.app", "notion.so"]),
+      (.communication, ["slack.com", "whatsapp.com", "discord.com", "zoom.us"]),
+      (.social, ["reddit.com", "x.com", "facebook.com", "instagram.com", "linkedin.com"]),
+      (.media, ["youtube.com", "netflix.com", "spotify.com", "twitch.tv"]),
+      (.gaming, ["steampowered.com", "epicgames.com", "riotgames.com"]),
+    ]
+    for (category, domains) in exactOrSubdomain {
+      if domains.contains(where: { domain == $0 || domain.hasSuffix(".\($0)") }) {
+        return category
+      }
+    }
+    return nil
   }
 }
 
@@ -99,6 +211,7 @@ public struct DailyActivityContributor: Equatable, Identifiable, Sendable {
   public let subject: ActivitySubject
   public let displayName: String
   public let category: ActivityCategory
+  public let categorySource: CategoryAssignmentSource
   public let duration: TimeInterval
 
   public var id: String {
@@ -109,11 +222,13 @@ public struct DailyActivityContributor: Equatable, Identifiable, Sendable {
     subject: ActivitySubject,
     displayName: String,
     category: ActivityCategory,
+    categorySource: CategoryAssignmentSource = .unknown,
     duration: TimeInterval
   ) {
     self.subject = subject
     self.displayName = displayName
     self.category = category
+    self.categorySource = categorySource
     self.duration = max(0, duration)
   }
 }
@@ -187,10 +302,11 @@ public enum ActivityIntervalReconciler {
       end: Date
     ) {
       guard end > start else { return }
+      let resolution = categories.resolution(for: subject)
       let key = Key(
         subject: subject,
         displayName: displayName,
-        category: categories.category(for: subject)
+        category: resolution.category
       )
       durations[key, default: 0] += end.timeIntervalSince(start)
     }
@@ -199,7 +315,8 @@ public enum ActivityIntervalReconciler {
       let applicationSubject = ActivitySubject.application(
         bundleIdentifier: applicationInterval.application.bundleIdentifier
       )
-      let matchingWebsites = websites
+      let matchingWebsites =
+        websites
         .filter {
           $0.website.browser.bundleIdentifier
             == applicationInterval.application.bundleIdentifier
@@ -250,6 +367,7 @@ public enum ActivityIntervalReconciler {
         subject: $0.key.subject,
         displayName: $0.key.displayName,
         category: $0.key.category,
+        categorySource: categories.resolution(for: $0.key.subject).source,
         duration: $0.value
       )
     }

@@ -74,6 +74,7 @@ struct MeetingCaptureView: View {
         showNextDay: model.showNextActivityDay,
         showToday: model.showTodayActivity,
         setCategory: model.setCategory,
+        resetCategory: model.resetCategory,
         openScreenRecordingSettings: model.openScreenRecordingSettings,
         openSafariExtensionPreferences: model.openSafariExtensionPreferences
       )
@@ -90,6 +91,7 @@ private struct ListeningView: View {
   let showNextDay: () -> Void
   let showToday: () -> Void
   let setCategory: (ActivityCategory, ActivitySubject) -> Void
+  let resetCategory: (ActivitySubject, String) -> Void
   let openScreenRecordingSettings: () -> Void
   let openSafariExtensionPreferences: () -> Void
 
@@ -346,14 +348,24 @@ private struct ListeningView: View {
               }
             }
           }
+          if contributor.categorySource == .manual {
+            Divider()
+            Button("Reset to Automatic") {
+              resetCategory(contributor.subject, contributor.displayName)
+            }
+          }
         } label: {
-          Text(contributor.category.displayName)
-            .font(Sumi.body(11))
-            .foregroundStyle(Sumi.ink)
-            .padding(.horizontal, 9)
-            .frame(height: 28)
-            .background(Sumi.softPaper)
-            .overlay(Rectangle().stroke(Sumi.rule, lineWidth: 1))
+          Text(
+            contributor.categorySource == .manual
+              ? "\(contributor.category.displayName) · Manual"
+              : contributor.category.displayName
+          )
+          .font(Sumi.body(11))
+          .foregroundStyle(Sumi.ink)
+          .padding(.horizontal, 9)
+          .frame(minHeight: 32)
+          .background(Sumi.softPaper)
+          .overlay(Rectangle().stroke(Sumi.rule, lineWidth: 1))
         }
         .menuStyle(.borderlessButton)
         Text(durationLabel(contributor.duration))

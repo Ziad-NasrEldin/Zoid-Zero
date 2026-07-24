@@ -228,6 +228,10 @@ private actor CategoryStoreSpy: CategoryAssignmentStoring {
     assignments[subject] = category
   }
 
+  func resetCategory(for subject: ActivitySubject) {
+    assignments.removeValue(forKey: subject)
+  }
+
   func userCategoryAssignments() -> [ActivitySubject: ActivityCategory] {
     assignments
   }

@@ -87,11 +87,14 @@ final class AppModel: ObservableObject {
     } else {
       websiteActivity = nil
     }
+    let categorizer = AutomaticActivityCategorizer(store: store)
     runtime = ZoidRuntime(
       capture: capture,
       activity: activity,
       websiteActivity: websiteActivity,
-      categoryAssignments: store
+      categoryAssignments: store,
+      automaticCategories: store,
+      categorizer: categorizer
     )
 
     eventTask = Task { [weak self] in
@@ -215,6 +218,13 @@ final class AppModel: ObservableObject {
   func setCategory(_ category: ActivityCategory, for subject: ActivitySubject) {
     Task {
       await runtime.setCategory(category, for: subject)
+      await refreshDailyActivity()
+    }
+  }
+
+  func resetCategory(for subject: ActivitySubject, displayName: String) {
+    Task {
+      await runtime.resetCategory(for: subject, displayName: displayName)
       await refreshDailyActivity()
     }
   }
