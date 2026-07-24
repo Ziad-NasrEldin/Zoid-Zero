@@ -38,10 +38,13 @@ final class AppTerminationCoordinator {
 
 @MainActor
 final class ZoidZeroAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+  private static let mainWindowFrameKey = "ZoidZero.MainWindowFrame"
+
   private var isTerminating = false
   private let launchUptime = ProcessInfo.processInfo.systemUptime
   private var dockVisibility: DockVisibilityController?
   private var loginItem: LoginItemController?
+  private weak var observedMainWindow: NSWindow?
   private var statusItem: NSStatusItem?
   private var uptimeTimer: Timer?
 
@@ -52,6 +55,55 @@ final class ZoidZeroAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   func applicationDidFinishLaunching(_ notification: Notification) {
     loginItem = LoginItemController()
     installStatusItem()
+  }
+
+  func applicationDidBecomeActive(_ notification: Notification) {
+    guard let application = notification.object as? NSApplication else { return }
+    Task { @MainActor [weak self, weak application] in
+      await Task.yield()
+      self?.observeMainWindow(in: application)
+    }
+  }
+
+  private func observeMainWindow(in application: NSApplication?) {
+    guard
+      let application,
+      let window = application.windows.first(where: \.canBecomeMain),
+      observedMainWindow !== window
+    else { return }
+    if let savedFrame = UserDefaults.standard.string(
+      forKey: Self.mainWindowFrameKey
+    ) {
+      let frame = NSRectFromString(savedFrame)
+      let screen = NSScreen.screens.first { $0.frame.intersects(frame) }
+        ?? window.screen
+        ?? NSScreen.main
+      window.setFrame(
+        window.constrainFrameRect(frame, to: screen),
+        display: true
+      )
+    }
+    observedMainWindow = window
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(windowFrameDidChange(_:)),
+      name: NSWindow.didMoveNotification,
+      object: window
+    )
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(windowFrameDidChange(_:)),
+      name: NSWindow.didResizeNotification,
+      object: window
+    )
+  }
+
+  @objc private func windowFrameDidChange(_ notification: Notification) {
+    guard let window = notification.object as? NSWindow else { return }
+    UserDefaults.standard.set(
+      NSStringFromRect(window.frame),
+      forKey: Self.mainWindowFrameKey
+    )
   }
 
   static func openApp() {
@@ -235,6 +287,12 @@ final class ZoidZeroAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   func applicationShouldTerminate(
     _ sender: NSApplication
   ) -> NSApplication.TerminateReply {
+    if let window = sender.windows.first(where: \.canBecomeMain) {
+      UserDefaults.standard.set(
+        NSStringFromRect(window.frame),
+        forKey: Self.mainWindowFrameKey
+      )
+    }
     guard let model = AppTerminationCoordinator.shared.model else {
       return .terminateNow
     }
